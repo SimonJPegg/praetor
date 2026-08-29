@@ -17,8 +17,12 @@ is measured against this. If something contradicts this doc, this doc wins.
 - **Network:** in-process simulated transport in v1, behind a message interface. Real sockets are
   a later, optional transport — never a v1 dependency.
 
-No runtime dependencies. Raft is the standard library plus your own code. If a dependency creeps
-into the core, question it.
+Minimal, boring dependencies. pydantic for the core data models — frozen, validated; validation
+is where option-1 invariants live (log index matches position, non-negative terms). The standard
+library for everything else. "Pure core" means pure *logic* — pure functions over immutable state,
+no I/O or side effects in the transition path — not the absence of a data-modelling library.
+Question anything beyond well-established data/validation libraries, and keep any dependency out
+of the transition logic itself.
 
 ---
 
