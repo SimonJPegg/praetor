@@ -6,9 +6,9 @@ from pydantic import BaseModel, ConfigDict
 class Role(StrEnum):
     """A node is exactly one of these at a time."""
 
-    Candidate = 'Candidate'
-    Follower = 'Follower'
-    Leader = 'Leader'
+    Candidate = "Candidate"
+    Follower = "Follower"
+    Leader = "Leader"
 
 
 class Node(BaseModel):
@@ -42,17 +42,14 @@ class Log[Command](BaseModel):
     def truncate(self, conflict_index: int) -> Log[Command]:
         """remove any entry in the log prior to the given index"""
         return self.model_copy(
-            update={
-                "entries": tuple(entry for entry in self.entries if entry.index < conflict_index )
-            }
+            update={"entries": tuple(entry for entry in self.entries if entry.index < conflict_index)}
         )
 
     def append(self, command: Command, term: int) -> Log[Command]:
         """the log is immutable, so copy and write"""
-        index =  self.entries[-1].index + 1 if self.entries else 1
+        index = self.entries[-1].index + 1 if self.entries else 1
         entry = LogEntry(command=command, term=term, index=index)
         return self.model_copy(update={"entries": (*self.entries, entry)})
-
 
 
 class NodeState[Command](BaseModel):
@@ -68,29 +65,33 @@ class NodeState[Command](BaseModel):
 
 class RequestVote(BaseModel):
     """A request for a vote in a leadership election"""
+
     model_config = ConfigDict(frozen=True)
     term: int
     candidate: Node
     last_log_index: int
     last_log_term: int
 
+
 class RequestVoteReply(BaseModel):
     """A response to a request for a vote"""
+
     model_config = ConfigDict(frozen=True)
     term: int
     vote_granted: bool
 
+
 class ElectionTimeout(BaseModel):
     """Signals that a leadership election has timed out"""
+
     model_config = ConfigDict(frozen=True)
+
 
 type Event[Command] = RequestVote | RequestVoteReply | ElectionTimeout
 type Message[Command] = RequestVote | RequestVoteReply
 
 
-
 def step[Command](
-        state: NodeState[Command],
-        event: Event[Command]) -> tuple[NodeState[Command], list[Message[Command]]]:
+    state: NodeState[Command], event: Event[Command]
+) -> tuple[NodeState[Command], list[Message[Command]]]:
     return state, []
-

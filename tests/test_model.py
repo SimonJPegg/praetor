@@ -7,8 +7,8 @@ def test_logs_are_appended_correctly() -> None:
         log = log.append(x, term=1)
 
     assert len(log.entries) == 10
+    assert log.last_entry is not None
     assert log.last_entry.command == 10
-
 
 
 def test_logs_are_truncated_correctly() -> None:
