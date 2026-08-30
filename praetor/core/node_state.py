@@ -34,10 +34,24 @@ class Log[Command](BaseModel):
     model_config = ConfigDict(frozen=True)
     entries: tuple[LogEntry[Command], ...] = ()
 
+    def is_current(self, their_term: int, their_index: int) -> bool:
+        """allows comparing if another log instance is up to date with this one"""
+        return their_term > self.last_term or (their_term == self.last_term and their_index >= self.last_index)
+
     @property
     def last_entry(self) -> LogEntry[Command] | None:
         """return the last entry in the log"""
         return self.entries[-1] if self.entries else None
+
+    @property
+    def last_index(self) -> int:
+        """return the index of the last entry in the log"""
+        return self.entries[-1].index if self.entries else 0
+
+    @property
+    def last_term(self) -> int:
+        """return the term of the last entry in the log"""
+        return self.entries[-1].term if self.entries else 0
 
     def truncate(self, conflict_index: int) -> Log[Command]:
         """remove any entry in the log prior to the given index"""
@@ -58,40 +72,8 @@ class NodeState[Command](BaseModel):
     model_config = ConfigDict(frozen=True)
     term: int
     role: Role
-    voted_for: Node | None = None
     log: Log[Command]
-    peers: list[Node]
-
-
-class RequestVote(BaseModel):
-    """A request for a vote in a leadership election"""
-
-    model_config = ConfigDict(frozen=True)
-    term: int
-    candidate: Node
-    last_log_index: int
-    last_log_term: int
-
-
-class RequestVoteReply(BaseModel):
-    """A response to a request for a vote"""
-
-    model_config = ConfigDict(frozen=True)
-    term: int
-    vote_granted: bool
-
-
-class ElectionTimeout(BaseModel):
-    """Signals that a leadership election has timed out"""
-
-    model_config = ConfigDict(frozen=True)
-
-
-type Event[Command] = RequestVote | RequestVoteReply | ElectionTimeout
-type Message[Command] = RequestVote | RequestVoteReply
-
-
-def step[Command](
-    state: NodeState[Command], event: Event[Command]
-) -> tuple[NodeState[Command], list[Message[Command]]]:
-    return state, []
+    peers: frozenset[Node]
+    current_node: Node
+    voted_for: Node | None = None
+    has_votes_from: frozenset[Node] = frozenset()

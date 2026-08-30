@@ -1,4 +1,4 @@
-from praetor.core.model import Log
+from praetor.core import Log
 
 
 def test_logs_are_appended_correctly() -> None:
