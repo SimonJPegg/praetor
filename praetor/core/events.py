@@ -29,7 +29,7 @@ class ElectionTimeout(BaseModel):
 
 
 type Event[Command] = RequestVote | RequestVoteReply | ElectionTimeout
-type Message[Command] = RequestVote | RequestVoteReply
+type Message[Command] = tuple[frozenset[Node], RequestVote | RequestVoteReply]
 
 
 def _step_down[Command](state: NodeState[Command], term: int) -> NodeState[Command]:
@@ -39,7 +39,7 @@ def _step_down[Command](state: NodeState[Command], term: int) -> NodeState[Comma
             "role": Role.Follower,
             "voted_for": None,
             "term": term,
-            "has_votes_from": {},
+            "has_votes_from": frozenset({}),
         }
     )
 
@@ -54,14 +54,17 @@ def _handle_election_timeout[Command](
             "role": Role.Candidate,
             "term": state.term + 1,
             "voted_for": state.current_node,
-            "has_votes_from": {state.current_node},
+            "has_votes_from": frozenset({state.current_node}),
         }
     ), [
-        RequestVote(
-            term=state.term + 1,
-            candidate=state.current_node,
-            last_log_index=state.log.last_index,
-            last_log_term=state.log.last_term,
+        (
+            state.peers,
+            RequestVote(
+                term=state.term + 1,
+                candidate=state.current_node,
+                last_log_index=state.log.last_index,
+                last_log_term=state.log.last_term,
+            ),
         )
     ]
 
@@ -71,7 +74,12 @@ def _handle_request_vote[Command](
 ) -> tuple[NodeState[Command], list[Message[Command]]]:
     """Handle a request from a peer to become leader"""
     if request.term < state.term:
-        return state, [RequestVoteReply(term=state.term, vote_granted=False, sender=state.current_node)]
+        return state, [
+            (
+                frozenset({request.candidate}),
+                RequestVoteReply(term=state.term, vote_granted=False, sender=state.current_node),
+            )
+        ]
 
     if request.term > state.term:
         state = _step_down(state, request.term)
@@ -88,7 +96,12 @@ def _handle_request_vote[Command](
             }
         )
 
-    return state, [RequestVoteReply(term=state.term, vote_granted=vote_granted, sender=state.current_node)]
+    return state, [
+        (
+            frozenset({request.candidate}),
+            RequestVoteReply(term=state.term, vote_granted=vote_granted, sender=state.current_node),
+        )
+    ]
 
 
 def _handle_request_vote_reply[Command](
@@ -102,7 +115,7 @@ def _handle_request_vote_reply[Command](
         state = _step_down(state, reply.term)
         return state, []
 
-    state = state.model_copy(update={"has_votes_from": state.has_votes_from | {reply.sender}})
+    state = state.model_copy(update={"has_votes_from": frozenset(state.has_votes_from | {reply.sender})})
 
     cluster = len(state.peers) + 1
     majority = (cluster // 2) + 1

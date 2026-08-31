@@ -15,7 +15,7 @@ def test_election_timeout_with_log_entries() -> None:
     assert new_state.role == Role.Candidate
     assert new_state.voted_for == state.current_node
 
-    request = messages[0]
+    _, request = messages[0]
     assert isinstance(request, RequestVote)
     assert request.term == state.term + 1
     assert request.candidate == state.current_node
@@ -37,7 +37,7 @@ def test_election_timeout_with_no_log() -> None:
     assert new_state.role == Role.Candidate
     assert new_state.voted_for == state.current_node
 
-    request_vote = messages[0]
+    _, request_vote = messages[0]
     assert isinstance(request_vote, RequestVote)
     assert request_vote.term == state.term + 1
     assert request_vote.candidate == state.current_node

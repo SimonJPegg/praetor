@@ -16,8 +16,8 @@ def test_a_node_wont_vote_twice() -> None:
     state, replies_one = handle(state, request_one)
     state, replies_two = handle(state, request_two)
 
-    reply_one = replies_one[0]
-    reply_two = replies_two[0]
+    _, reply_one = replies_one[0]
+    _, reply_two = replies_two[0]
     assert isinstance(reply_one, RequestVoteReply)
     assert isinstance(reply_two, RequestVoteReply)
     assert reply_one.vote_granted
@@ -39,7 +39,7 @@ def test_higher_term_causes_step_down() -> None:
     )
     request = RequestVote(term=5, candidate=Node(name="steve", uri="2"), last_log_index=1, last_log_term=1)
     state, messages = handle(state, request)
-    reply = messages[0]
+    _, reply = messages[0]
     assert isinstance(reply, RequestVoteReply)
     assert reply.vote_granted
     assert reply.sender == node
@@ -65,9 +65,9 @@ def test_votes_idempotent_in_term() -> None:
     state, replies_two = handle(state, request_two)
     state, replies_three = handle(state, request_three)
 
-    reply_one = replies_one[0]
-    reply_two = replies_two[0]
-    reply_three = replies_three[0]
+    _, reply_one = replies_one[0]
+    _, reply_two = replies_two[0]
+    _, reply_three = replies_three[0]
     assert isinstance(reply_one, RequestVoteReply)
     assert isinstance(reply_two, RequestVoteReply)
     assert isinstance(reply_three, RequestVoteReply)
@@ -93,7 +93,7 @@ def test_deny_stale_log() -> None:
     request = RequestVote(term=4, candidate=Node(name="steve", uri="2"), last_log_index=1, last_log_term=1)
     state, messages = handle(state, request)
 
-    reply = messages[0]
+    _, reply = messages[0]
     assert isinstance(reply, RequestVoteReply)
     assert not reply.vote_granted
     assert state.voted_for is None
@@ -114,7 +114,7 @@ def test_stale_request_votes_are_denied() -> None:
     request = RequestVote(term=6, candidate=Node(name="steve", uri="2"), last_log_index=1, last_log_term=1)
     state, messages = handle(state, request)
 
-    reply = messages[0]
+    _, reply = messages[0]
     assert state.role == Role.Follower
     assert isinstance(reply, RequestVoteReply)
     assert not reply.vote_granted
