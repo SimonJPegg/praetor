@@ -1,5 +1,6 @@
 from praetor.actors.traits import Actor, AddressedEvent, MessageDispatcher
 from praetor.core import Node
+from praetor.logging import logger
 
 
 class InMemoryDispatcher[Command](MessageDispatcher[Command]):
@@ -11,6 +12,7 @@ class InMemoryDispatcher[Command](MessageDispatcher[Command]):
 
     def register(self, node: Node, actor: Actor[AddressedEvent[Command]]) -> None:
         """Registers an actor to receive messages"""
+        logger.debug(f"registered actor with address {node.uri}", node="dispacher", term=0, role="dispatcher")
         self._registry[node] = actor
 
     def enqueue_messages(self, messages: list[AddressedEvent[Command]]) -> None:
@@ -18,4 +20,9 @@ class InMemoryDispatcher[Command](MessageDispatcher[Command]):
         for msg in messages:
             if msg.to:
                 for target_node in msg.to:
+                    logger.debug(
+                        f"dispatching {type(msg.event).__name__} to {target_node.uri}",
+                        node="dispacher",
+                        role="dispatcher",
+                    )
                     self._registry[target_node].tell(msg)

@@ -9,7 +9,7 @@ async def test_actors_transition_state() -> None:
     dispatcher = InMemoryDispatcher[int]()
     peers: set[Node] = set()
     node = Node(name="jim", uri="1")
-    actor = RaftActor(node, peers=peers, dispatcher=dispatcher)
+    actor = RaftActor(node, peers=peers, dispatcher=dispatcher, max_election_timeout_seconds=10)
     actor.start()
     initial_term = actor._state.term
     actor.tell(AddressedEvent(to=frozenset(), event=ElectionTimeout()))

@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict
 
-from praetor.core.node_state import Node, NodeState, Role
+from praetor.core.node_state import LogEntry, Node, NodeState, Role
 
 
 class RequestVote(BaseModel):
@@ -28,8 +28,15 @@ class ElectionTimeout(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
-type Event[Command] = RequestVote | RequestVoteReply | ElectionTimeout
-type Message[Command] = tuple[frozenset[Node], RequestVote | RequestVoteReply]
+class AppendEntries[Command](BaseModel):
+    """Request to follower to add the given entries to their log"""
+
+    model_config = ConfigDict(frozen=True)
+    entries: list[LogEntry[Command]]
+
+
+type Event[Command] = RequestVote | RequestVoteReply | ElectionTimeout | AppendEntries[Command]
+type Message[Command] = tuple[frozenset[Node], RequestVote | RequestVoteReply | AppendEntries[Command]]
 
 
 def _step_down[Command](state: NodeState[Command], term: int) -> NodeState[Command]:
@@ -126,6 +133,14 @@ def _handle_request_vote_reply[Command](
     return state, []
 
 
+def _handle_append_entries[Command](
+    state: NodeState[Command], entries: AppendEntries[Command]
+) -> tuple[NodeState[Command], list[Message[Command]]]:
+    """empty placeholder"""
+    # TODO: this function
+    return state, []
+
+
 def handle[Command](
     state: NodeState[Command], event: Event[Command]
 ) -> tuple[NodeState[Command], list[Message[Command]]]:
@@ -137,3 +152,5 @@ def handle[Command](
             return _handle_request_vote(state, event)
         case RequestVoteReply():
             return _handle_request_vote_reply(state, event)
+        case AppendEntries():
+            return _handle_append_entries(state, event)

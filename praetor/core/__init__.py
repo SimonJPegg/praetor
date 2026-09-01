@@ -1,3 +1,4 @@
+from praetor.core.events import AppendEntries as AppendEntries
 from praetor.core.events import ElectionTimeout as ElectionTimeout
 from praetor.core.events import Event as Event
 from praetor.core.events import Message as Message

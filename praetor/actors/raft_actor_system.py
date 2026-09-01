@@ -6,13 +6,18 @@ from praetor.core import Node
 class RaftActorSystem[T](ActorSystem):
     """Builds a cluster of actors."""
 
-    def __init__(self, actor_count: int, dispatcher: MessageDispatcher[T]):
+    def __init__(self, actor_count: int, max_election_timeout_seconds: int, dispatcher: MessageDispatcher[T]):
         """Spin up actor_count nodes, with peers and a shared dispatcher"""
         self._dispatcher = dispatcher
         self._actors: list[Actor[AddressedEvent[T]]] = []
         pool = {Node(name=f"actor{x}", uri=f"actor://local/actor{x}") for x in range(1, actor_count + 1)}
         for n in pool:
-            actor = RaftActor(node=n, peers=pool - {n}, dispatcher=self._dispatcher)
+            actor = RaftActor(
+                node=n,
+                peers=pool - {n},
+                max_election_timeout_seconds=max_election_timeout_seconds,
+                dispatcher=self._dispatcher,
+            )
             dispatcher.register(n, actor)
             self._actors.append(actor)
 

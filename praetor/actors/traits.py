@@ -20,7 +20,7 @@ class Actor[T](ABC):
         pass
 
     @abstractmethod
-    async def send(self, message: T) -> Any:
+    async def ask(self, message: T) -> Any:
         """Give the actor something to do"""
         pass
 
