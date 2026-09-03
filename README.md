@@ -14,8 +14,7 @@ Spins up 5 nodes, wires them through an in-process actor system, and runs. Every
 
 ## What works
 
-Leader election. But not stably. Heartbeats fire but don't reset follower timers, so followers keep
-timing out and the cluster re-elects every interval.
+Stable Leader election.
 
 ## How it's built
 

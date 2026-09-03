@@ -1,6 +1,6 @@
 import asyncio
 import random
-from asyncio import Future, Queue, Task, create_task, gather, get_running_loop
+from asyncio import CancelledError, Future, Queue, Task, create_task, gather, get_running_loop
 
 from praetor.actors.traits import Actor, AddressedEvent, MessageDispatcher
 from praetor.core import AppendEntries, ElectionTimeout, Event, Log, Node, NodeState, Role, handle
@@ -36,31 +36,53 @@ class RaftActor[Command](Actor[AddressedEvent[Command]]):
         self._election_task = create_task(self._election_loop())
 
     async def _election_loop(self) -> None:
-        """ """
+        """Followers and candidates run this."""
         while True:
-            next_election_timeout = random.randint(
-                self._max_election_timeout_seconds // 2, self._max_election_timeout_seconds
-            )
-            logger.debug(
-                f"will trigger an election in {next_election_timeout} without a heartbeat",
-                node=self._state.current_node.uri,
-                term=self._state.term,
-                role=self._state.role,
-            )
-            await asyncio.sleep(next_election_timeout)
-            self.tell(AddressedEvent(to=frozenset(), event=ElectionTimeout()))
+            try:
+                next_election_timeout = random.randint(
+                    self._max_election_timeout_seconds // 2, self._max_election_timeout_seconds
+                )
+                logger.debug(
+                    f"will trigger an election in {next_election_timeout} without a heartbeat",
+                    node=self._state.current_node.uri,
+                    term=self._state.term,
+                    role=self._state.role,
+                )
+                await asyncio.sleep(next_election_timeout)
+                self.tell(AddressedEvent(to=frozenset(), event=ElectionTimeout()))
+            except CancelledError:
+                logger.debug(
+                    "election loop cancelled",
+                    node=self._state.current_node.uri,
+                    term=self._state.term,
+                    role=self._state.role,
+                )
+                raise
 
     async def _heartbeat_loop(self) -> None:
+        """Only the leader runs this."""
         while True:
-            next_heartbeat = self._max_election_timeout_seconds // 4
-            logger.debug(
-                f"will heartbeat in {next_heartbeat}",
-                node=self._state.current_node.uri,
-                term=self._state.term,
-                role=self._state.role,
-            )
-            await asyncio.sleep(next_heartbeat)
-            self.tell(AddressedEvent(to=self._state.peers, event=AppendEntries(entries=[])))
+            try:
+                next_heartbeat = self._max_election_timeout_seconds // 4
+                logger.debug(
+                    f"will heartbeat in {next_heartbeat}",
+                    node=self._state.current_node.uri,
+                    term=self._state.term,
+                    role=self._state.role,
+                )
+                await asyncio.sleep(next_heartbeat)
+                logger.debug(self._state.peers)
+                self._dispatcher.enqueue_messages(
+                    [AddressedEvent(to=frozenset({to}), event=AppendEntries(entries=[])) for to in self._state.peers]
+                )
+            except CancelledError:
+                logger.debug(
+                    "heartbeat loop cancelled",
+                    node=self._state.current_node.uri,
+                    term=self._state.term,
+                    role=self._state.role,
+                )
+                raise
 
     async def _run_loop(self) -> None:
         """Pull one event at a time and process it. Single consumer"""
@@ -73,6 +95,7 @@ class RaftActor[Command](Actor[AddressedEvent[Command]]):
             except Exception as e:
                 if future and not future.done():
                     future.set_exception(e)
+                logger.exception(e)
             finally:
                 self.mailbox.task_done()
 
@@ -88,22 +111,26 @@ class RaftActor[Command](Actor[AddressedEvent[Command]]):
             role=self._state.role,
         )
 
-        self._update_election_loops(pre_role, self._state.role, message.event)
+        await self._update_election_loops(pre_role, self._state.role, message.event)
         return self._state
 
-    def _update_election_loops(self, pre_role: Role, post_role: Role, event: Event[Command]) -> None:
+    async def _update_election_loops(self, pre_role: Role, post_role: Role, event: Event[Command]) -> None:
+        """A node runs at most one timer at a time. Swap on role changes."""
         match (pre_role, post_role, event):
             case Role.Candidate, Role.Leader, _:
                 if self._election_task:
                     self._election_task.cancel()
+                    await gather(self._election_task, return_exceptions=True)
                 self._heartbeat_task = create_task(self._heartbeat_loop())
             case Role.Leader, Role.Follower | Role.Candidate, _:
                 if self._heartbeat_task:
                     self._heartbeat_task.cancel()
+                    await gather(self._heartbeat_task, return_exceptions=True)
                 self._election_task = create_task(self._election_loop())
             case Role.Follower | Role.Candidate, _, AppendEntries():
                 if self._election_task:
                     self._election_task.cancel()
+                    await gather(self._election_task, return_exceptions=True)
                 self._election_task = create_task(self._election_loop())
 
     async def ask(self, message: AddressedEvent[Command]) -> NodeState[Command]:
