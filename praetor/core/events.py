@@ -33,10 +33,21 @@ class AppendEntries[Command](BaseModel):
 
     model_config = ConfigDict(frozen=True)
     entries: list[LogEntry[Command]]
+    term: int
+    sender: Node
 
 
-type Event[Command] = RequestVote | RequestVoteReply | ElectionTimeout | AppendEntries[Command]
-type Message[Command] = tuple[frozenset[Node], RequestVote | RequestVoteReply | AppendEntries[Command]]
+class AppendEntriesReply(BaseModel):
+    """Respond to a request to update log entries indicating success status"""
+
+    model_config = ConfigDict(frozen=True)
+    term: int
+    success: bool
+    sender: Node
+
+
+type Event[Command] = RequestVote | RequestVoteReply | ElectionTimeout | AppendEntries[Command] | AppendEntriesReply
+type Message[Command] = tuple[frozenset[Node], Event[Command]]
 
 
 def _step_down[Command](state: NodeState[Command], term: int) -> NodeState[Command]:
@@ -134,11 +145,19 @@ def _handle_request_vote_reply[Command](
 
 
 def _handle_append_entries[Command](
-    state: NodeState[Command], entries: AppendEntries[Command]
+    state: NodeState[Command], append: AppendEntries[Command]
 ) -> tuple[NodeState[Command], list[Message[Command]]]:
-    """empty placeholder"""
-    # TODO: this function
-    return state, []
+    """handle a request to append new entries to the state's log"""
+    reply_to = frozenset({append.sender})
+    if append.term < state.term:
+        return state, [(reply_to, AppendEntriesReply(term=state.term, success=False, sender=state.current_node))]
+    elif append.term > state.term:
+        stepped_down = _step_down(state, append.term)
+        return stepped_down, [
+            (reply_to, AppendEntriesReply(term=stepped_down.term, success=True, sender=state.current_node))
+        ]
+    else:  # can only be ==
+        return state, [(reply_to, AppendEntriesReply(term=state.term, success=True, sender=state.current_node))]
 
 
 def handle[Command](
@@ -154,3 +173,5 @@ def handle[Command](
             return _handle_request_vote_reply(state, event)
         case AppendEntries():
             return _handle_append_entries(state, event)
+        case AppendEntriesReply():
+            return state, []

@@ -73,7 +73,13 @@ class RaftActor[Command](Actor[AddressedEvent[Command]]):
                 await asyncio.sleep(next_heartbeat)
                 logger.debug(self._state.peers)
                 self._dispatcher.enqueue_messages(
-                    [AddressedEvent(to=frozenset({to}), event=AppendEntries(entries=[])) for to in self._state.peers]
+                    [
+                        AddressedEvent(
+                            to=frozenset({to}),
+                            event=AppendEntries(entries=[], sender=self._state.current_node, term=self._state.term),
+                        )
+                        for to in self._state.peers
+                    ]
                 )
             except CancelledError:
                 logger.debug(
@@ -132,7 +138,9 @@ class RaftActor[Command](Actor[AddressedEvent[Command]]):
             case (NodeState(role=Role.Leader), NodeState(role=Role.Follower) | NodeState(role=Role.Candidate), _):
                 await cancel_task(self._heartbeat_task)
                 self._election_task = create_task(self._election_loop())
-            case (NodeState(role=Role.Follower) | NodeState(role=Role.Candidate), _, AppendEntries()):
+            case (NodeState(role=Role.Follower) | NodeState(role=Role.Candidate), _, AppendEntries() as ae) if (
+                ae.term >= pre_state.term
+            ):
                 await cancel_task(self._election_task)
                 self._election_task = create_task(self._election_loop())
             case _ if pre_state.voted_for != post_state.voted_for:
