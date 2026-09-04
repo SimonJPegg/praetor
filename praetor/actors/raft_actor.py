@@ -39,8 +39,8 @@ class RaftActor[Command](Actor[AddressedEvent[Command]]):
         """Followers and candidates run this."""
         while True:
             try:
-                next_election_timeout = random.randint(
-                    self._max_election_timeout_seconds // 2, self._max_election_timeout_seconds
+                next_election_timeout = random.uniform(
+                    self._max_election_timeout_seconds / 2, self._max_election_timeout_seconds
                 )
                 logger.debug(
                     f"will trigger an election in {next_election_timeout} without a heartbeat",
@@ -63,7 +63,7 @@ class RaftActor[Command](Actor[AddressedEvent[Command]]):
         """Only the leader runs this."""
         while True:
             try:
-                next_heartbeat = self._max_election_timeout_seconds // 4
+                next_heartbeat = self._max_election_timeout_seconds / 4
                 logger.debug(
                     f"will heartbeat in {next_heartbeat}",
                     node=self._state.current_node.uri,
@@ -101,7 +101,7 @@ class RaftActor[Command](Actor[AddressedEvent[Command]]):
 
     async def handle_message(self, message: AddressedEvent[Command]) -> NodeState[Command]:
         """Handle raft messages"""
-        pre_role = self._state.role
+        pre_state = self._state.model_copy(deep=True)
         self._state, messages = handle(self._state, message.event)
         self._dispatcher.enqueue_messages([AddressedEvent(to=to, event=event) for to, event in messages])
         logger.debug(
@@ -111,26 +111,32 @@ class RaftActor[Command](Actor[AddressedEvent[Command]]):
             role=self._state.role,
         )
 
-        await self._update_election_loops(pre_role, self._state.role, message.event)
+        await self._update_election_loops(pre_state, self._state, message.event)
         return self._state
 
-    async def _update_election_loops(self, pre_role: Role, post_role: Role, event: Event[Command]) -> None:
+    async def _update_election_loops(
+        self, pre_state: NodeState[Command], post_state: NodeState[Command], event: Event[Command]
+    ) -> None:
         """A node runs at most one timer at a time. Swap on role changes."""
-        match (pre_role, post_role, event):
-            case Role.Candidate, Role.Leader, _:
-                if self._election_task:
-                    self._election_task.cancel()
-                    await gather(self._election_task, return_exceptions=True)
+
+        async def cancel_task(task: asyncio.Task[None] | None) -> None:
+            """cancel the passed in task"""
+            if task:
+                task.cancel()
+                await gather(task, return_exceptions=True)
+
+        match (pre_state, post_state, event):
+            case (NodeState(role=Role.Candidate), NodeState(role=Role.Leader), _):
+                await cancel_task(self._election_task)
                 self._heartbeat_task = create_task(self._heartbeat_loop())
-            case Role.Leader, Role.Follower | Role.Candidate, _:
-                if self._heartbeat_task:
-                    self._heartbeat_task.cancel()
-                    await gather(self._heartbeat_task, return_exceptions=True)
+            case (NodeState(role=Role.Leader), NodeState(role=Role.Follower) | NodeState(role=Role.Candidate), _):
+                await cancel_task(self._heartbeat_task)
                 self._election_task = create_task(self._election_loop())
-            case Role.Follower | Role.Candidate, _, AppendEntries():
-                if self._election_task:
-                    self._election_task.cancel()
-                    await gather(self._election_task, return_exceptions=True)
+            case (NodeState(role=Role.Follower) | NodeState(role=Role.Candidate), _, AppendEntries()):
+                await cancel_task(self._election_task)
+                self._election_task = create_task(self._election_loop())
+            case _ if pre_state.voted_for != post_state.voted_for:
+                await cancel_task(self._election_task)
                 self._election_task = create_task(self._election_loop())
 
     async def ask(self, message: AddressedEvent[Command]) -> NodeState[Command]:
