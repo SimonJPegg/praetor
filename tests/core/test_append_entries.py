@@ -68,3 +68,24 @@ def test_valid_request_is_accepted() -> None:
     assert reply.success
     assert reply.sender == state.current_node
     assert reply.term == new_state.term
+
+
+def test_candidate_steps_down_at_equal_term() -> None:
+    sender = Node(name="steve", uri="2")
+    node = Node(name="dave", uri="1")
+    state = NodeState(
+        term=4,
+        role=Role.Candidate,
+        voted_for=node,
+        log=Log[int](),
+        peers=frozenset({sender}),
+        current_node=node,
+    )
+    event = AppendEntries[int](entries=[], term=4, sender=sender)
+    new_state, messages = handle(state, event)
+    assert new_state.role == Role.Follower
+    assert new_state.term == 4
+
+    _, reply = messages[0]
+    assert isinstance(reply, AppendEntriesReply)
+    assert reply.success

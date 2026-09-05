@@ -151,7 +151,7 @@ def _handle_append_entries[Command](
     reply_to = frozenset({append.sender})
     if append.term < state.term:
         return state, [(reply_to, AppendEntriesReply(term=state.term, success=False, sender=state.current_node))]
-    elif append.term > state.term:
+    elif (append.term > state.term) or (state.role == Role.Candidate and state.term == append.term):
         stepped_down = _step_down(state, append.term)
         return stepped_down, [
             (reply_to, AppendEntriesReply(term=stepped_down.term, success=True, sender=state.current_node))
