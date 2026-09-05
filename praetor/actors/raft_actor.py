@@ -58,6 +58,9 @@ class RaftActor[Command](Actor[AddressedEvent[Command]]):
                     role=self._state.role,
                 )
                 raise
+            except Exception:
+                logger.exception("Election loop failed")
+                raise
 
     async def _heartbeat_loop(self) -> None:
         """Only the leader runs this."""
@@ -89,6 +92,9 @@ class RaftActor[Command](Actor[AddressedEvent[Command]]):
                     role=self._state.role,
                 )
                 raise
+            except Exception:
+                logger.exception("Heartbeat loop failed")
+                raise
 
     async def _run_loop(self) -> None:
         """Pull one event at a time and process it. Single consumer"""
@@ -101,7 +107,7 @@ class RaftActor[Command](Actor[AddressedEvent[Command]]):
             except Exception as e:
                 if future and not future.done():
                     future.set_exception(e)
-                logger.exception(e)
+                logger.exception("Encountered exception ob main loop")
             finally:
                 self.mailbox.task_done()
 
