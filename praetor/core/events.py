@@ -146,6 +146,20 @@ def _handle_request_vote_reply[Command](
     return state, []
 
 
+def _append_divergent_entries[Command](
+    state: NodeState[Command], entries: list[LogEntry[Command]]
+) -> NodeState[Command]:
+    """Delete-and-replace on first divergence (Raft 5.3): keep the agreed prefix, take the leader's tail."""
+    log = state.log
+    for entry in entries:
+        current = log.log_at_index(entry.index)
+        if current and current.term == entry.term:
+            continue
+        log = log.truncate(entry.index)
+        log = log.append(term=entry.term, command=entry.command)
+    return state.model_copy(update={"log": log})
+
+
 def _handle_append_entries[Command](
     state: NodeState[Command], append: AppendEntries[Command]
 ) -> tuple[NodeState[Command], list[Message[Command]]]:
@@ -157,12 +171,9 @@ def _handle_append_entries[Command](
     ):
         return state, [(reply_to, AppendEntriesReply(term=state.term, success=False, sender=state.current_node))]
     elif (append.term > state.term) or (state.role == Role.Candidate and state.term == append.term):
-        stepped_down = _step_down(state, append.term)
-        return stepped_down, [
-            (reply_to, AppendEntriesReply(term=stepped_down.term, success=True, sender=state.current_node))
-        ]
-    else:  # can only be ==
-        return state, [(reply_to, AppendEntriesReply(term=state.term, success=True, sender=state.current_node))]
+        state = _step_down(state, append.term)
+    state = _append_divergent_entries(state, append.entries)
+    return state, [(reply_to, AppendEntriesReply(term=state.term, success=True, sender=state.current_node))]
 
 
 def handle[Command](

@@ -187,3 +187,95 @@ def test_append_to_new_empty_log() -> None:
     _, reply = messages[0]
     assert isinstance(reply, AppendEntriesReply)
     assert reply.success
+
+
+def test_logs_stay_correct_when_already_up_to_date() -> None:
+    entries: list[LogEntry[int]] = [
+        LogEntry[int](term=(index // 2) + 1, index=index, command=index) for index in range(1, 11)
+    ]
+    log = Log[int]()
+    for entry in entries:
+        log = log.append(entry.command, entry.term)
+
+    sender = Node(name="steve", uri="2")
+    node = Node(name="dave", uri="1")
+    state = NodeState(
+        term=6,
+        role=Role.Follower,
+        voted_for=None,
+        log=log,
+        peers=frozenset({sender}),
+        current_node=node,
+    )
+    event = AppendEntries[int](entries=entries, term=6, sender=sender, prev_log_index=10, prev_log_term=6)
+    new_state, _ = handle(state, event)
+
+    assert new_state.log.entries == tuple(entries)
+
+
+def test_logs_are_correct_when_new_entries_are_to_be_appended() -> None:
+    entries: list[LogEntry[int]] = [
+        LogEntry[int](term=(index // 2) + 1, index=index, command=index) for index in range(1, 11)
+    ]
+    existing_entries = [e for e in entries if e.term <= 4]
+    new_entries = [e for e in entries if e.term >= 5]
+
+    log = Log[int]()
+    for entry in existing_entries:
+        log = log.append(entry.command, entry.term)
+
+    sender = Node(name="steve", uri="2")
+    node = Node(name="dave", uri="1")
+    state = NodeState(
+        term=6,
+        role=Role.Follower,
+        voted_for=None,
+        log=log,
+        peers=frozenset({sender}),
+        current_node=node,
+    )
+    event = AppendEntries[int](
+        entries=new_entries,
+        term=6,
+        sender=sender,
+        prev_log_index=existing_entries[-1].index,
+        prev_log_term=existing_entries[-1].term,
+    )
+    new_state, _ = handle(state, event)
+
+    assert new_state.log.entries == tuple(entries)
+
+
+def test_logs_are_correct_when_a_divergence_is_discovered() -> None:
+    entries: list[LogEntry[int]] = [
+        LogEntry[int](term=(index // 2) + 1, index=index, command=index) for index in range(1, 11)
+    ]
+    existing_entries = [e for e in entries if e.term <= 4]
+    new_entries = [e for e in entries if e.term >= 5]
+    incorrect_entries = [e.model_copy(update={"term": 4, "command": 0}) for e in new_entries]
+    existing_entries.extend(incorrect_entries)
+
+    log = Log[int]()
+    for entry in existing_entries:
+        log = log.append(entry.command, entry.term)
+
+    sender = Node(name="steve", uri="2")
+    node = Node(name="dave", uri="1")
+    state = NodeState(
+        term=6,
+        role=Role.Follower,
+        voted_for=None,
+        log=log,
+        peers=frozenset({sender}),
+        current_node=node,
+    )
+    event = AppendEntries[int](
+        entries=new_entries,
+        term=6,
+        sender=sender,
+        prev_log_index=7,
+        prev_log_term=4,
+    )
+    new_state, _ = handle(state, event)
+
+    assert new_state.log.entries == tuple(entries)
