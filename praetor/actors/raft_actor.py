@@ -4,7 +4,7 @@ from asyncio import CancelledError, Future, Queue, Task, create_task, gather, ge
 
 from praetor.actors.traits import Actor, AddressedEvent, MessageDispatcher
 from praetor.core import AppendEntries, ElectionTimeout, Event, Log, Node, NodeState, Role, handle
-from praetor.logging import logger
+from praetor.log import logger
 
 
 class RaftActor[Command](Actor[AddressedEvent[Command]]):
@@ -79,7 +79,13 @@ class RaftActor[Command](Actor[AddressedEvent[Command]]):
                     [
                         AddressedEvent(
                             to=frozenset({to}),
-                            event=AppendEntries(entries=[], sender=self._state.current_node, term=self._state.term),
+                            event=AppendEntries(
+                                entries=[],
+                                sender=self._state.current_node,
+                                term=self._state.term,
+                                prev_log_term=self._state.log.last_term,
+                                prev_log_index=self._state.log.last_index,
+                            ),
                         )
                         for to in self._state.peers
                     ]

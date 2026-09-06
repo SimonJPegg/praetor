@@ -35,6 +35,8 @@ class AppendEntries[Command](BaseModel):
     entries: list[LogEntry[Command]]
     term: int
     sender: Node
+    prev_log_index: int
+    prev_log_term: int
 
 
 class AppendEntriesReply(BaseModel):
@@ -149,7 +151,10 @@ def _handle_append_entries[Command](
 ) -> tuple[NodeState[Command], list[Message[Command]]]:
     """handle a request to append new entries to the state's log"""
     reply_to = frozenset({append.sender})
-    if append.term < state.term:
+    log_at_index = state.log.log_at_index(append.prev_log_index)
+    if append.term < state.term or (
+        append.prev_log_index != 0 and (not log_at_index or log_at_index.term != append.prev_log_term)
+    ):
         return state, [(reply_to, AppendEntriesReply(term=state.term, success=False, sender=state.current_node))]
     elif (append.term > state.term) or (state.role == Role.Candidate and state.term == append.term):
         stepped_down = _step_down(state, append.term)

@@ -1,6 +1,6 @@
 from praetor.actors.traits import Actor, AddressedEvent, MessageDispatcher
 from praetor.core import Node
-from praetor.logging import logger
+from praetor.log import logger
 
 
 class InMemoryDispatcher[Command](MessageDispatcher[Command]):

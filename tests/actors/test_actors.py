@@ -94,7 +94,12 @@ async def test_heartbeat_resets_follower_election_timer() -> None:
 
     pre_election_task = actor._election_task
     await actor.ask(
-        AddressedEvent(to=frozenset(), event=AppendEntries(entries=[], sender=test_node, term=actor._state.term))
+        AddressedEvent(
+            to=frozenset(),
+            event=AppendEntries(
+                entries=[], sender=test_node, term=actor._state.term, prev_log_index=0, prev_log_term=0
+            ),
+        )
     )
     post_election_task = actor._election_task
 

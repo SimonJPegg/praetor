@@ -38,6 +38,12 @@ class Log[Command](BaseModel):
         """allows comparing if another log instance is up to date with this one"""
         return their_term > self.last_term or (their_term == self.last_term and their_index >= self.last_index)
 
+    def log_at_index(self, index: int) -> LogEntry[Command] | None:
+        """Return the log entry at the given index"""
+        if index < 1 or index > self.last_index:
+            return None
+        return self.entries[index - 1]
+
     @property
     def last_entry(self) -> LogEntry[Command] | None:
         """return the last entry in the log"""
