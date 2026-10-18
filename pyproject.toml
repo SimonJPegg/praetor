@@ -5,7 +5,7 @@ description = "A Raft consensus implementation using the actor model in Python."
 requires-python = ">=3.14"
 dependencies = [
     "loguru>=0.7.3",
-    "pydantic==2.13.5",
+    "pydantic==2.14.1",
 ]
 
 [dependency-groups]
